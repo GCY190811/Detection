@@ -1,6 +1,6 @@
 import sys
 sys.path.append("..")
-from utils.utils import *
+from utils.parse_config import *
 
 
 def test_parse_model_config(path):
