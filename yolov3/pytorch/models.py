@@ -112,7 +112,17 @@ def create_modules(module_defs):
             modules.add_module(f"shortcut_{module_i}", EmptyLayer())
 
         elif module_def["type"] == "yolo":
-            pass
+            anchor_idxs = [int(x) for x in module_def["mask"].split(",")]
+
+            anchors = [int(x) for x in module_def["anchors"].split(",")]
+            anchors = [(anchors[i], anchors[i + 1])
+                       for i in range(0, len(anchors), 2)]
+            anchors = [anchors[i] for i in anchor_idxs]
+            num_classes = int(module_def["classes"])
+            img_size = hyperparams["height"]
+
+            yolo_layer = YOLOLayer(anchors, num_classes, img_size)
+            modules.add_module(f"yolo_{module_i}", yolo_layer)
 
         module_list.append(modules)
         output_filters.append(filters)
@@ -137,6 +147,74 @@ class EmptyLayer(nn.Module):
     def __init__(self):
         super(EmptyLayer, self).__init__()
 
+
+class YOLOLayer(nn.Module):
+    """Detection layer"""
+    def __init__(self, anchors, num_classes, img_dim=416):
+        super(YOLOLayer, self).__init__()
+        self.anchors = anchors
+        self.num_anchors = len(anchors)
+        self.num_classes = num_classes
+        self.ignore_thres = 0.5
+        self.mse_loss = nn.MSELoss()
+        self.bce_loss = nn.BCELoss()
+        self.obj_scale = 1
+        self.noobj_scale = 100
+        self.metrics = {}
+        self.img_dim = img_dim
+        self.grid_size = 0
+
+    def forward(self, x, targets=None, img_dim=None):
+
+        # Tensors for cuda support
+        FloatTensor = torch.cuda.FloatTensor if x.is_cuda else torch.FloatTensor
+        LongTensor = torch.cuda.LongTensor if x.is_cuda else torch.LongTensor
+        ByteTensor = torch.cuda.ByteTensor if x.is_cuda else torch.ByteTensor
+
+        self.img_dim = img_dim
+        num_samples = x.size(0)
+        grid_size = x.size(2)
+
+        prediction = (x.view(num_samples, self.num_anchors,
+                             self.num_classes + 5, grid_size,
+                             grid_size).permute(0, 1, 3, 4, 2).contiguous())
+
+        # Get outputs
+        x = torch.sigmoid(prediction[..., 0])
+        y = torch.sigmoid(prediction[..., 1])
+        w = prediction[..., 2]
+        h = prediction[..., 3]
+        pred_conf = torch.sigmoid(prediction[..., 4])
+        pred_cls = torch.sigmoid(prediction[..., 5:])
+
+        # if grid size does not match current we compute new offsets
+        if grid_size != self.grid_size:
+            # ???
+            self.compute_grid_offsets(grid_size, cuda=x.is_cuda)
+
+        # Add offset and scale with anchors
+        pred_bboxes = FloatTensor(prediction[..., :4].shape)
+        pred_bboxes[..., 0] = x.data + self.grid_x
+        pred_bboxes[..., 1] = y.data + self.grid_y
+        pred_bboxes[..., 2] = torch.exp(w.data) * self.anchor_w
+        pred_bboxes[..., 3] = torch.exp(h.data) * self.anchor_h
+
+        output = torch.cat((
+            pred_bboxes.view(num_samples, -1, 4) * self.stride,
+            pred_conf.view(num_samples, -1, 1),
+            pred_cls.view(num_samples, -1, self.num_classes),
+        ), -1)
+
+        if targets is None:
+            return output, 0
+        else:
+            iou_scores, class_mask, obj_mask, noobj_mask, tx, ty, tw, th, tcls, tconf = build_targets(
+                pred_boxes=pred_bboxes,
+                pred_cls=pred_cls,
+                target=targets,
+                anchors=self.scaled_anchors,
+                ignore_thres=self.ignore_thres,
+            )
 
 class Darknet(nn.Module):
     """YOLOV3 object detection model"""
