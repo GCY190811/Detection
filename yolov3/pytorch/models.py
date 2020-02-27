@@ -164,6 +164,27 @@ class YOLOLayer(nn.Module):
         self.img_dim = img_dim
         self.grid_size = 0
 
+    def compute_grid_offsets(self, grid_size, cuda=True):
+        self.grid_size = grid_size
+        g = self.grid_size
+        FloatTensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+        self.stride = self.img_dim / self.grid_size
+
+        # Calculate offsets for each grid
+        self.grid_x = torch.arange(g).repeat(g, 1).view([1, 1, g,
+                                                         g]).type(FloatTensor)
+        self.grid_y = torch.arange(g).repeat(g,
+                                             1).t().view([1, 1, g,
+                                                          g]).type(FloatTensor)
+
+        self.scaled_anchors = FloatTensor([
+            (a_w / self.stride, a_h / self.stride) for a_w, a_h in self.anchors
+        ])
+        self.anchor_w = self.scaled_anchors[:, 0:1].view(
+            (1, self.num_anchors, 1, 1))
+        self.anchor_h = self.scaled_anchors[:, 1:2].view(
+            (1, self.num_anchors, 1, 1))
+
     def forward(self, x, targets=None, img_dim=None):
 
         # Tensors for cuda support
@@ -215,6 +236,60 @@ class YOLOLayer(nn.Module):
                 anchors=self.scaled_anchors,
                 ignore_thres=self.ignore_thres,
             )
+
+            # Loss : Mask outputs to ignore non-existing objects (except with conf loss)
+            # 目标框使用 mse loss
+            loss_x = self.mse_loss(x[obj_mask], tx[obj_mask])
+            loss_y = self.mse.loss(y[obj_mask], ty[obj_mask])
+            loss_w = self.mse.loss(w[obj_mask], tw[obj_mask])
+            loss_h = self.mse_loss(h[obj_mask], th[obj_mask])
+
+            # 置信度使用 bce 交叉熵, 有无物体的交叉熵比例贡献不一样
+            loss_conf_obj = self.bce_loss(pred_conf[obj_mask], tconf[obj_mask])
+            loss_conf_noobj = self.bce_loss(pred_conf[noobj_mask],
+                                            tconf[noobj_mask])
+            loss_conf = self.obj_scale * loss_conf_obj + self.noobj_scale * loss_conf_noobj
+
+            # 分类交叉熵
+            loss_cls = self.bce_loss(pred_cls[obj_mask], tcls[obj_mask])
+
+            # 总体损失 坐标损失，置信度损失，分类损失
+            total_loss = loss_x + loss_y + loss_w + loss_h + loss_conf + loss_cls
+
+            # Metrics
+            cls_acc = 100 * class_mask[obj_mask].mean()
+            conf_obj = pred_conf[obj_mask].mean()
+            conf_noobj = pred_conf[noobj_mask].mean()
+            conf50 = (pred_conf > 0.5).float()
+            iou50 = (iou_scores > 0.5).float()
+            iou75 = (iou_scores > 0.75).float()
+            detected_mask = conf50 * class_mask * tconf
+            precision = torch.sum(
+                iou50 * detected_mask) / (conf50.sum() + 1e-16)
+            recall50 = torch.sum(
+                iou50 * detected_mask) / (obj_mask.sum() + 1e-16)
+            recall75 = torch.sum(
+                iou75 * detected_mask) / (obj_mask.sum() + 1e-16)
+
+            self.metrics = {
+                "loss": to_cpu(total_loss).item(),
+                "x": to_cpu(loss_x).item(),
+                "y": to_cpu(loss_y).item(),
+                "w": to_cpu(loss_w).item(),
+                "h": to_cpu(loss_h).item(),
+                "conf": to_cpu(loss_conf).item(),
+                "cls": to_cpu(loss_cls).item(),
+                "cls_acc": to_cpu(cls_acc).item(),
+                "recall50": to_cpu(recall50).item(),
+                "recall75": to_cpu(recall75).item(),
+                "precision": to_cpu(precision).item(),
+                "conf_obj": to_cpu(conf_obj).item(),
+                "conf_noobj": to_cpu(conf_noobj).item(),
+                "grid_size": grid_size,
+            }
+
+            return output, total_loss
+
 
 class Darknet(nn.Module):
     """YOLOV3 object detection model"""
