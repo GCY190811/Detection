@@ -1,4 +1,4 @@
-from __feature__ import division
+from __future__ import division
 import math
 import time
 import tqdm
@@ -9,6 +9,10 @@ from torch.autograd import Variable
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+
+
+def to_cpu(tensor):
+    return torch.detach().cpu()
 
 
 def bbox_wh_iou(wh1, wh2):
@@ -121,3 +125,29 @@ def build_targets(pred_boxes, pred_cls, target, anchors, ignore_thres):
 
     tconf = obj_mask.float()
     return iou_scores, class_mask, obj_mask, noobj_mask, tx, ty, tw, th, tcls, tconf
+
+
+def load_pretrained_dict(model, pretrained_dict, use_logging=True):
+    # huaxia recommend
+    model_dict = {}
+    pretrain_block_count = 0
+    pretrain_all_block_count = 0
+    state_dict = model.state_dict()
+    not_load_blocks = []
+    for k, v in pretrained_dict.items():
+        if k in state_dict:
+            if state_dict[k].size() == v.size():
+                model_dict[k] = v
+                pretrain_block_count += 1
+            else:
+                not_load_blocks.append(k)
+        else:
+            not_load_blocks.append(k)
+        pretrain_all_block_count += 1
+    state_dict.update(model_dict)
+    model.load_state_dict(state_dict)
+    log_info(
+        'Pre-traind Model loaded!{}/{}blocks loaded!'.format(
+            pretrain_block_count, pretrain_all_block_count), use_logging)
+    log_info('The following blocks are not loaded:', use_logging)
+    log_info(not_load_blocks, use_logging)
