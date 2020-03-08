@@ -1,6 +1,7 @@
 """ save model only containing parameters"""
 
 from models import *
+from torchsummary import summary
 
 import torch
 import torch.nn as nn
@@ -24,12 +25,24 @@ if __name__ == "__main__":
     parser.add_argument(
         "--target_model",
         type=str,
-        default="/home/guo/myDisk/DatasetFiles/coco/model/target_models",
+        default="/home/guo/Models/yolo/target_model",
         help="path to checkpoint model")
     opt = parser.parse_args()
     print(opt)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = Darknet(opt.model_def).to(device)
-    model.load_state_dict(torch.load(opt.weights_path))
-    print(model.state_dict())
+
+    # 统计信息
+    summary(model, input_size=(3, 416, 416))
+
+    # 加载模型，查看模型中的参数量
+    state_dict = torch.load(opt.weights_path)
+    model.load_state_dict(state_dict)
+
+    # show keys
+    for k, v in state_dict.items():
+        print(k, "\t", state_dict[k].size())
+    
+    
+

@@ -12,7 +12,7 @@ import matplotlib.patches as patches
 
 
 def to_cpu(tensor):
-    return torch.detach().cpu()
+    return tensor.detach().cpu()
 
 
 def bbox_wh_iou(wh1, wh2):

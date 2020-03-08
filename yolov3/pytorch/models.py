@@ -70,7 +70,7 @@ def create_modules(module_defs):
                 f"conv_{module_i}",
                 nn.Conv2d(
                     in_channels=output_filters[-1],
-                    output_filters=filters,
+                    out_channels=filters,
                     kernel_size=kernel_size,
                     stride=int(module_def["stride"]),
                     padding=pad,
@@ -296,11 +296,11 @@ class Darknet(nn.Module):
     """YOLOV3 object detection model"""
     def __init__(self, config_path, img_size=416):
         super(Darknet, self).__init__()
-        self.model_defs = parse_model_config(config_path)
+        self.module_defs = parse_model_config(config_path)
         self.hyperparams, self.module_list = create_modules(self.module_defs)
         self.yolo_layers = [
             layer[0] for layer in self.module_list
-            if hassttr(layer[0], "metrics")
+            if hasattr(layer[0], "metrics")
         ]
         self.img_size = img_size
         self.seen = 0
