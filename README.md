@@ -12,6 +12,19 @@ Only save model trainable parameters, torch.save(model.state_dict())
 *LeakyReLU*: 0  
 *Upsample*: 0
 
+**MACs & FLOPs**  
+```markdown
+FLOPs is abbreviation of floating operations which includes mul / add / div ... etc.
+MACs stands for multiply–accumulate operation that performs a <- a + (b x c).
+As shown in the text, one MACs has one mul and one add. That is why in many places FLOPs is nearly two times as MACs.
+
+When comparing MACs /FLOPs, we want the number to be implementation-agnostic and as general as possible. Therefore in THOP, we only consider the number of multiplications and ignore all other operations.
+
+PS: The FLOPs is approximated by multiplying two.
+```
+
+
+
 原始代码中BatchNorm2d尺寸为2N, 从保存的模型来看，应为4N, 分别是(weight, bias, running_mean, running_var)
 
 ```markdown
