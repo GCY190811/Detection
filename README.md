@@ -3,6 +3,7 @@
 ## YOLOv3  
 
 ### model(inference) size  
+
 Only save model trainable parameters, torch.save(model.state_dict())  
 
 **params(counts)**  
@@ -27,13 +28,14 @@ Estimated Total Size (MB): 1139.33
 ----------------------------------------------------------------
 ```
 
-## Todo:  
+## Todo  
 
 - [ ] 修改torchsummary, BatchNorm2d参数量为4×N  
-- [ ] 模型flops统计
+- [x] 模型flops统计
 - [ ] SSD
 
 ## reference  
 
 <https://github.com/eriklindernoren/PyTorch-YOLOv3>  
 <https://github.com/sksq96/pytorch-summary>  
+<https://github.com/Lyken17/pytorch-OpCounter>  

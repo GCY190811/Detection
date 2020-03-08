@@ -2,6 +2,8 @@
 
 from models import *
 from torchsummary import summary
+from thop import profile
+from thop import clever_format
 
 import torch
 import torch.nn as nn
@@ -33,9 +35,11 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = Darknet(opt.model_def).to(device)
 
+    print("====pytorch-summary====")
     # 统计信息
     summary(model, input_size=(3, 416, 416))
 
+    print("====load model && print state_dict and size====")
     # 加载模型，查看模型中的参数量
     state_dict = torch.load(opt.weights_path)
     model.load_state_dict(state_dict)
@@ -43,6 +47,9 @@ if __name__ == "__main__":
     # show keys
     for k, v in state_dict.items():
         print(k, "\t", state_dict[k].size())
-    
-    
 
+    print("====THOP: PyTorch-OpCounter====")
+    input = torch.randn(1, 3, 416, 416).to(device)
+    macs, params = profile(model, inputs=(input, ))
+    result = clever_format([params, macs], "%.3f")
+    print(f"Params: {result[0]}, MACs: {result[1]}")
