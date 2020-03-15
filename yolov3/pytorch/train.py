@@ -1,7 +1,6 @@
 from __future__ import division
 
 from models import *
-# from utils.logger import *
 from utils.utils import *
 from utils.datasets import *
 from utils.parse_config import *
@@ -14,6 +13,7 @@ import sys
 import time
 import datetime
 import argparse
+import logging
 
 import torch
 from torch.utils.data import DataLoader
@@ -23,6 +23,7 @@ from torch.autograd import Variable
 import torch.optim as optim
 
 if __name__ == "__main__":
+    # 参数初始化
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=100, help="number of epochs")
     parser.add_argument("--batch_size", type=int, default=6, help="size of each image batch")
@@ -39,9 +40,6 @@ if __name__ == "__main__":
     parser.add_argument("--model_output", type=str, default="/home/myDisk/DatasetFiles/coco/model", help="path to model saving")
     opt = parser.parse_args()
     print(opt)
-
-    # 日志文件，初始化
-    # logger = Logger("logs")
 
     # device 设置使用设备
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

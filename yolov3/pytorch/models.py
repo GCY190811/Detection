@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 
 import numpy as np
+import logging
 
 from utils.parse_config import *
 from utils.utils import build_targets, to_cpu #, non_max_suppression
@@ -13,6 +14,7 @@ from utils.utils import build_targets, to_cpu #, non_max_suppression
 import matplotlib.pyplot as pyplot
 import matplotlib.patches as patches
 
+logger = logging.getLogger('main.models')
 
 def create_modules(module_defs):
     """
@@ -196,6 +198,8 @@ class YOLOLayer(nn.Module):
         self.img_dim = img_dim
         num_samples = x.size(0)
         grid_size = x.size(2)
+
+        logger.info("forward, input.size: %d, %d, %d, %d", x.size(0), x.size(1), x.size(2), x.size(3))
 
         prediction = (x.view(num_samples, self.num_anchors,
                              self.num_classes + 5, grid_size,
