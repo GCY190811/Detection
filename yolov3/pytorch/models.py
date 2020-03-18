@@ -105,7 +105,6 @@ def create_modules(module_defs):
             modules.add_module(f"upsample_{module_i}", upsample)
 
         elif module_def["type"] == "route":
-            # ?
             layers = [int(x) for x in module_def["layers"].split(",")]
             filters = sum([output_filters[1:][i] for i in layers])
             modules.add_module(f"route_{module_i}", EmptyLayer())
@@ -170,12 +169,21 @@ class YOLOLayer(nn.Module):
     def compute_grid_offsets(self, grid_size, cuda=True):
         self.grid_size = grid_size
         g = self.grid_size
+        # 注意这里每一次使用FloatTensor的时候
         FloatTensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
         self.stride = self.img_dim / self.grid_size
 
-        # Calculate offsets for each grid
+        # Calculate offsets for each grid, grid_x
+        # 0, 1, 2, 3
+        # 0, 1, 2, 3
+        # 0, 1, 2, 3
+        # 0, 1, 2, 3
         self.grid_x = torch.arange(g).repeat(g, 1).view([1, 1, g,
                                                          g]).type(FloatTensor)
+        # 0, 0, 0, 0
+        # 1, 1, 1, 1
+        # 2, 2, 2, 2
+        # 3, 3, 3, 3
         self.grid_y = torch.arange(g).repeat(g,
                                              1).t().view([1, 1, g,
                                                           g]).type(FloatTensor)
@@ -215,13 +223,13 @@ class YOLOLayer(nn.Module):
 
         # if grid size does not match current we compute new offsets
         if grid_size != self.grid_size:
-            # ???
             self.compute_grid_offsets(grid_size, cuda=x.is_cuda)
 
         # Add offset and scale with anchors
         pred_bboxes = FloatTensor(prediction[..., :4].shape)
         pred_bboxes[..., 0] = x.data + self.grid_x
         pred_bboxes[..., 1] = y.data + self.grid_y
+        # 乘scale过的anchor_w, anchor_h
         pred_bboxes[..., 2] = torch.exp(w.data) * self.anchor_w
         pred_bboxes[..., 3] = torch.exp(h.data) * self.anchor_h
 
