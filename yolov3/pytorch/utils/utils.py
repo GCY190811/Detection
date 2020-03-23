@@ -9,6 +9,9 @@ from torch.autograd import Variable
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import logging
+
+logger = logging.getLogger('main.utils.utils')
 
 
 def to_cpu(tensor):
@@ -51,7 +54,8 @@ def xywh2xyxy(x):
 
 
 def bbox_wh_iou(wh1, wh2):
-    # 进行了怎样的操作， inter_area的求法？？？
+    # 比较gt中的box与哪个尺寸的anchor重叠率更高
+    # 不理解为什么转置
     wh2 = wh2.t()
     w1, h1 = wh1[0], wh1[1]
     w2, h2 = wh2[0], wh2[1]
@@ -98,6 +102,7 @@ def bbox_iou(box1, box2, x1y1x2y2=True):
 
 
 def build_targets(pred_boxes, pred_cls, target, anchors, ignore_thres):
+    log_info("utils: build_targets")
 
     ByteTensor = torch.cuda.ByteTensor if pred_boxes.is_cuda else torch.ByteTensor
     FloatTensor = torch.cuda.FloatTensor if pred_boxes.is_cuda else torch.FloatTensor
@@ -106,6 +111,8 @@ def build_targets(pred_boxes, pred_cls, target, anchors, ignore_thres):
     nA = pred_boxes.size(1)
     nC = pred_cls.size(-1)
     nG = pred_boxes.size(2)
+
+    log_info(f"nB {nB}, nA {nA}, nC {nC}, nG{nG}")
 
     # Output tensors
     obj_mask = ByteTensor(nB, nA, nG, nG).fill_(0)
@@ -119,19 +126,28 @@ def build_targets(pred_boxes, pred_cls, target, anchors, ignore_thres):
     tcls = FloatTensor(nB, nA, nG, nG, nC).fill_(0)
 
     # Convert to position relative to box
-    # ??? target
+    # target 维度是怎样的？
+    # target_boxes 尺寸放大到feature map相关，这里凸显出，标注数据与图片大小相关的好处
     target_boxes = target[:, 2:6] * nG
+    log_info(f"target_boxes: {len(target_boxes)}, {len(target_boxes[0])}")
+
     gxy = target_boxes[:, :2]
     gwh = target_boxes[:, 2:]
     # Get anchors with best iou
     ious = torch.stack([bbox_wh_iou(anchor, gwh) for anchor in anchors])
+
+    # 这里求解最匹配的box
     best_iou, best_n = ious.max(0)
+    log_info(f"best_iou: {best_n}")
+
     # Separate target values
     # ? .t()
     b, target_labels = target[:, :2].long().t()
     gx, gy = gxy.t()
     gw, gh = gwh.t()
     gi, gj = gxy.long().t()
+    log_info(f"gi: {gi}, gj: {gj}")
+
     # Set masks
     obj_mask[b, best_n, gj, gi] = 1
     noobj_mask[b, best_n, gj, gi] = 0
@@ -140,6 +156,10 @@ def build_targets(pred_boxes, pred_cls, target, anchors, ignore_thres):
     for i, anchors_ious in enumerate(ious.t()):
         noobj_mask[b[i], anchors_ious > ignore_thres, gj[i], gi[i]] = 0
 
+    # obj_mask 与 noobj_mask两者不一定互斥
+    # obj_mask iou重叠最好的。 noobj_mask 排除iou最好的部分，排除预测目标框>0.5的部分
+
+    # 反推回预测的状态值。
     # Coordinates
     tx[b, best_n, gj, gi] = gx - gx.floor()
     ty[b, best_n, gj, gi] = gy - gy.floor()
@@ -152,6 +172,7 @@ def build_targets(pred_boxes, pred_cls, target, anchors, ignore_thres):
     tcls[b, best_n, gj, gi, target_labels] = 1
 
     # Compute label correctness and iou at best anchor
+    # 这两个值很奇怪
     class_mask[b, best_n, gj, gi] = (
         pred_cls[b, best_n, gj, gi].argmax(-1) == target_labels).float()
     iou_scores[b, best_n, gj, gi] = bbox_iou(pred_boxes[b, best_n, gj, gi],
@@ -210,17 +231,20 @@ def non_max_suppression(prediction, conf_thres=0.5, nms_thres=0.4):
         # Sort by it
         image_pred = image_pred[(-score).argsort()]
         class_confs, class_preds = image_pred[:, 5:].max(1, keepdim=True)
-        detections = torch.cat((image_pred[:, :5], class_confs.float(), class_preds.float()), 1)
+        detections = torch.cat(
+            (image_pred[:, :5], class_confs.float(), class_preds.float()), 1)
         # Perform non-maximum suppression
         keep_boxes = []
         while detections.size(0):
-            large_overlap = bbox_iou(detections[0, :4].unsqueeze(0), detections[:, :4]) > nms_thres
+            large_overlap = bbox_iou(detections[0, :4].unsqueeze(0),
+                                     detections[:, :4]) > nms_thres
             label_match = detections[0, -1] == detections[:, -1]
             # Indices of boxes with lower confidence scores, large IOUs and matching labels
             invalid = large_overlap & label_match
             weights = detections[invalid, 4:5]
             # Merge overlapping bboxes by order of confidence
-            detections[0, :4] = (weights * detections[invalid, :4]).sum(0) / weights.sum()
+            detections[0, :4] = (
+                weights * detections[invalid, :4]).sum(0) / weights.sum()
             keep_boxes += [detections[0]]
             detections = detections[~invalid]
         if keep_boxes:

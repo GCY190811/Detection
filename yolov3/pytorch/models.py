@@ -252,6 +252,7 @@ class YOLOLayer(nn.Module):
 
             # Loss : Mask outputs to ignore non-existing objects (except with conf loss)
             # 目标框使用 mse loss
+            # 计算loss采用最原始的数值
             loss_x = self.mse_loss(x[obj_mask], tx[obj_mask])
             loss_y = self.mse.loss(y[obj_mask], ty[obj_mask])
             loss_w = self.mse.loss(w[obj_mask], tw[obj_mask])
