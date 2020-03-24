@@ -117,6 +117,7 @@ if __name__ == "__main__":
             if batches_done % opt.gradient_accumulations:
                 # Accumulates gradient before each step
                 optimizer.step()
+                # backward()时，梯度是累计计算的，需要手动清零，不清零相当于多个batch_size的梯度累计叠加
                 optimizer.zero_grad()
 
             # ----------------
@@ -125,6 +126,7 @@ if __name__ == "__main__":
 
             log_str = "\n---- [Epoch %d/%d, Batch %d/%d] ----\n" % (epoch, opt.epochs, batch_i, len(dataloader))
 
+            # ???
             metric_table = [["Metrics", *[f"YOLO Layer {i}" for i in range(len(model.yolo_layers))]]]
 
             # Log metrics at each YOLO layer
@@ -132,6 +134,7 @@ if __name__ == "__main__":
                 formats = {m: "%.6f" for m in metrics}
                 formats["grid_size"] = "%2d"
                 formats["cls_acc"] = "%.2f%%"
+                # ???
                 row_metrics = [formats[metric] % yolo.metrics.get(metric, 0) for yolo in model.yolo_layers]
                 metric_table += [[metric, *row_metrics]]
 

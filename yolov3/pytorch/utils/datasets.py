@@ -58,9 +58,11 @@ class ImageFolder(Dataset):
 
 class ListDataset(Dataset):
     def __init__(self, list_path, img_size=416, augment=True, multiscale=True, normalized_labels=True):
+        # 读取所有文件
         with open(list_path, "r") as file:
             self.img_files = file.readlines()
 
+        # 读取对应标签
         self.label_files = [
             path.replace("Dataset", "DatasetFiles").replace("images", "labels").replace(".png", ".txt").replace(".jpg", ".txt")
             for path in self.img_files
@@ -69,6 +71,7 @@ class ListDataset(Dataset):
         self.max_objects = 100
         self.augment = augment
         self.multiscale = multiscale
+        # label保存数据 与 图片尺寸是否有关
         self.normalized_labels = normalized_labels
         self.min_size = self.img_size - 3 * 32
         self.max_size = self.img_size + 3 * 32
@@ -92,7 +95,9 @@ class ListDataset(Dataset):
 
         _, h, w = img.shape
         h_factor, w_factor = (h, w) if self.normalized_labels else (1, 1)
+
         # Pad to square resolution
+        # pad 正方形
         img, pad = pad_to_square(img, 0)
         _, padded_h, padded_w = img.shape
 
@@ -104,6 +109,7 @@ class ListDataset(Dataset):
 
         targets = None
         if os.path.exists(label_path):
+            # box数量，类别，x_scale, y_scale, h_scale, w_scale
             boxes = torch.from_numpy(np.loadtxt(label_path).reshape(-1, 5))
             # Extract coordinates for unpadded + unscaled image
             x1 = w_factor * (boxes[:, 1] - boxes[:, 3] / 2)
@@ -111,16 +117,19 @@ class ListDataset(Dataset):
             x2 = w_factor * (boxes[:, 1] + boxes[:, 3] / 2)
             y2 = h_factor * (boxes[:, 2] + boxes[:, 4] / 2)
             # Adjust for added padding
+            # 相对图片最新尺寸，调整目标框坐标位置
             x1 += pad[0]
             y1 += pad[2]
             x2 += pad[1]
             y2 += pad[3]
             # Returns (x, y, w, h)
+            # 重新回到 比例状态
             boxes[:, 1] = ((x1 + x2) / 2) / padded_w
             boxes[:, 2] = ((y1 + y2) / 2) / padded_h
             boxes[:, 3] *= w_factor / padded_w
             boxes[:, 4] *= h_factor / padded_h
 
+            # box数量, index位???, 类别, c_x, c_y, w, h
             targets = torch.zeros((len(boxes), 6))
             targets[:, 1:] = boxes
 
@@ -136,6 +145,7 @@ class ListDataset(Dataset):
         # Remove empty placeholder targets
         targets = [boxes for boxes in targets if boxes is not None]
         # Add sample index to targets
+        # 空余出的1位是index位???
         for i, boxes in enumerate(targets):
             boxes[:, 0] = i
         targets = torch.cat(targets, 0)
