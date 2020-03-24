@@ -157,6 +157,7 @@ class YOLOLayer(nn.Module):
         self.anchors = anchors
         self.num_anchors = len(anchors)
         self.num_classes = num_classes
+        # GT与anchor iou > 0.5的位置从no_object的状态中去除
         self.ignore_thres = 0.5
         self.mse_loss = nn.MSELoss()
         self.bce_loss = nn.BCELoss()
@@ -271,12 +272,14 @@ class YOLOLayer(nn.Module):
             total_loss = loss_x + loss_y + loss_w + loss_h + loss_conf + loss_cls
 
             # Metrics
+            # cls_acc 不理解???
             cls_acc = 100 * class_mask[obj_mask].mean()
             conf_obj = pred_conf[obj_mask].mean()
             conf_noobj = pred_conf[noobj_mask].mean()
             conf50 = (pred_conf > 0.5).float()
             iou50 = (iou_scores > 0.5).float()
             iou75 = (iou_scores > 0.75).float()
+            # detected_mask ???
             detected_mask = conf50 * class_mask * tconf
             precision = torch.sum(
                 iou50 * detected_mask) / (conf50.sum() + 1e-16)

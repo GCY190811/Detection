@@ -134,6 +134,7 @@ def build_targets(pred_boxes, pred_cls, target, anchors, ignore_thres):
     gxy = target_boxes[:, :2]
     gwh = target_boxes[:, 2:]
     # Get anchors with best iou
+    # 拿到哪个尺寸的anchor，与在feature map上的位置无关
     ious = torch.stack([bbox_wh_iou(anchor, gwh) for anchor in anchors])
 
     # 这里求解最匹配的box
@@ -145,10 +146,12 @@ def build_targets(pred_boxes, pred_cls, target, anchors, ignore_thres):
     b, target_labels = target[:, :2].long().t()
     gx, gy = gxy.t()
     gw, gh = gwh.t()
+    # 都是target_box指定位置的值, 不是完整的feature map size
     gi, gj = gxy.long().t()
     log_info(f"gi: {gi}, gj: {gj}")
 
     # Set masks
+    # 直接在feature map尺寸上做mask
     obj_mask[b, best_n, gj, gi] = 1
     noobj_mask[b, best_n, gj, gi] = 0
 
@@ -172,9 +175,11 @@ def build_targets(pred_boxes, pred_cls, target, anchors, ignore_thres):
     tcls[b, best_n, gj, gi, target_labels] = 1
 
     # Compute label correctness and iou at best anchor
-    # 这两个值很奇怪
+    # argmax(-1) == target_label 注意这里是target_labels会从0开始
+    # 预测与GT的重叠部分
     class_mask[b, best_n, gj, gi] = (
         pred_cls[b, best_n, gj, gi].argmax(-1) == target_labels).float()
+    # 预测框和目标框的iou 分数
     iou_scores[b, best_n, gj, gi] = bbox_iou(pred_boxes[b, best_n, gj, gi],
                                              target_boxes,
                                              xqy1x2y2=False)
