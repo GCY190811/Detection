@@ -131,6 +131,7 @@ if __name__ == "__main__":
         img_detections.extend(detections)
 
     # Bounding-box colors
+    # 关注一下如何画框的颜色
     cmap = plt.get_cmap("tab20b")
     colors = [cmap(i) for i in np.linspace(0, 1, 20)]
 
@@ -149,6 +150,7 @@ if __name__ == "__main__":
         # Draw bounding boxes and labels of detections
         if detections is not None:
             # Rescale boxes to original image
+            # 关注这里框位置恢复到输入图片的比例
             detections = rescale_boxes(detections, opt.img_size, img.shape[:2])
             unique_labels = detections[:, -1].cpu().unique()
             n_cls_preds = len(unique_labels)
@@ -186,6 +188,7 @@ if __name__ == "__main__":
                 )
 
         # Save generated image with detections
+        # 关注画图的方法
         plt.axis("off")
         plt.gca().xaxis.set_major_locator(NullLocator())
         plt.gca().yaxis.set_major_locator(NullLocator())
