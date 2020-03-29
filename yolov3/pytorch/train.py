@@ -140,6 +140,7 @@ if __name__ == "__main__":
 
                 # Tensorboard logging
                 tensorboard_log = []
+                # 三个 yolo_layer
                 for j, yolo in enumerate(model.yolo_layers):
                     for name, metric in yolo.metrics.items():
                         if name != "grid_size":

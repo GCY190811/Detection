@@ -9,12 +9,13 @@ import numpy as np
 import logging
 
 from utils.parse_config import *
-from utils.utils import build_targets, to_cpu #, non_max_suppression
+from utils.utils import build_targets, to_cpu, non_max_suppression
 
 import matplotlib.pyplot as pyplot
 import matplotlib.patches as patches
 
 logger = logging.getLogger('main.models')
+
 
 def create_modules(module_defs):
     """
@@ -192,6 +193,9 @@ class YOLOLayer(nn.Module):
         self.scaled_anchors = FloatTensor([
             (a_w / self.stride, a_h / self.stride) for a_w, a_h in self.anchors
         ])
+        logger.info(
+            f"YOLOLayer, compute_grid_offsets: {self.scaled_anchors.size()}")
+
         self.anchor_w = self.scaled_anchors[:, 0:1].view(
             (1, self.num_anchors, 1, 1))
         self.anchor_h = self.scaled_anchors[:, 1:2].view(
@@ -208,11 +212,16 @@ class YOLOLayer(nn.Module):
         num_samples = x.size(0)
         grid_size = x.size(2)
 
-        logger.info("forward, input.size: %d, %d, %d, %d", x.size(0), x.size(1), x.size(2), x.size(3))
+        logger.info(
+            f"YOLOLayer input: {x.size(0)}, {x.size(1)}, {x.size(2)}, {x.size(3)}"
+        )
 
         prediction = (x.view(num_samples, self.num_anchors,
                              self.num_classes + 5, grid_size,
                              grid_size).permute(0, 1, 3, 4, 2).contiguous())
+        logger.info(
+            f"After resize, prediction: {prediction.size(0)}, {prediction.size(1)}, {prediction.size(2)}, {prediction.size(3)}, {prediction.size(4)}"
+        )
 
         # Get outputs
         x = torch.sigmoid(prediction[..., 0])
@@ -239,6 +248,9 @@ class YOLOLayer(nn.Module):
             pred_conf.view(num_samples, -1, 1),
             pred_cls.view(num_samples, -1, self.num_classes),
         ), -1)
+        logger.info(
+            f"YOLOLayer output: {output.size(0)}, {output.size(1)}, {output.size(2)}\n"
+        )
 
         if targets is None:
             return output, 0
@@ -312,9 +324,18 @@ class Darknet(nn.Module):
     """YOLOV3 object detection model"""
     def __init__(self, config_path, img_size=416):
         super(Darknet, self).__init__()
+
         # self.module_defs 词典列表，每个词典为一层的信息
         self.module_defs = parse_model_config(config_path)
         self.hyperparams, self.module_list = create_modules(self.module_defs)
+
+        # nn.Sequential()中有以下记录
+        #  Sequential(
+        #    (yolo_106): YOLOLayer(
+        #      (mse_loss): MSELoss()
+        #      (bce_loss): BCELoss()
+        #    )
+        #  )
         self.yolo_layers = [
             layer[0] for layer in self.module_list
             if hasattr(layer[0], "metrics")
@@ -324,14 +345,18 @@ class Darknet(nn.Module):
         self.header_info = np.array([0, 0, 0, self.seen, 0], dtype=np.int32)
 
     def forward(self, x, targets=None):
+        logger.info(f"Model input: {x.shape}")
         img_dim = x.shape[2]
         loss = 0
+        # 记录每一层的输出，为route或shortcut准备
+        # 返回yolo层的输出和loss
         layer_outputs, yolo_outputs = [], []
         for i, (module_def,
                 module) in enumerate(zip(self.module_defs, self.module_list)):
             if module_def["type"] in ["convolutional", "upsample", "maxpool"]:
                 x = module(x)
             elif module_def["type"] == "route":
+                # 在filter上的融合
                 x = torch.cat([
                     layer_outputs[int(layer_i)]
                     for layer_i in module_def["layers"].split(",")
@@ -344,7 +369,10 @@ class Darknet(nn.Module):
                 loss += layer_loss
                 yolo_outputs.append(x)
             layer_outputs.append(x)
+
+        # 转到cpu上了
         yolo_outputs = to_cpu(torch.cat(yolo_outputs, 1))
+        logger.info(f"Model output: {yolo_outputs.shape}\n")
         return yolo_outputs if targets is None else (loss, yolo_outputs)
 
     def load_darknet_weights(self, weights_path):
@@ -380,24 +408,28 @@ class Darknet(nn.Module):
                     bn_layer.weight.data.copy_(bn_w)
                     ptr += num_b
                     # Running Mean
-                    bn_rm = torch.from_numpy(weights[ptr:ptr + num_b]).view_as(bn_layer.running_mean)
+                    bn_rm = torch.from_numpy(weights[ptr:ptr + num_b]).view_as(
+                        bn_layer.running_mean)
                     bn_layer.running_mean.data.copy_(bn_rm)
                     ptr += num_b
                     # Running Var
-                    bn_rv = torch.from_numpy(weights[ptr:ptr+num_b]).view_as(bn_layer.running_var)
+                    bn_rv = torch.from_numpy(weights[ptr:ptr + num_b]).view_as(
+                        bn_layer.running_var)
                     bn_layer.running_var.data.copy_(bn_rv)
                     ptr += num_b
                 else:
                     num_b = conv_layer.bias.numel()
-                    conv_b = torch.from_numpy(weights[ptr:ptr+num_b]).view_as(conv_layer.bias)
+                    conv_b = torch.from_numpy(
+                        weights[ptr:ptr + num_b]).view_as(conv_layer.bias)
                     conv_layer.bias.data.copy_(conv_b)
                     ptr += num_b
                 # Load conv. weights
                 num_w = conv_layer.weight.numel()
-                conv_w = torch.from_numpy(weights[ptr : ptr + num_w]).view_as(conv_layer.weight)
+                conv_w = torch.from_numpy(weights[ptr:ptr + num_w]).view_as(
+                    conv_layer.weight)
                 conv_layer.weight.data.copy_(conv_w)
                 ptr += num_w
-                
+
     def save_darknet_weights(self, path, cutoff=-1):
         """
         path: path of the new weights file

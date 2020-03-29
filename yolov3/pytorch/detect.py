@@ -42,7 +42,7 @@ if __name__ == "__main__":
                         help="path to class label file")
     parser.add_argument("--conf_thres",
                         type=float,
-                        default=0.8,
+                        default=0.5,
                         help="object confidence threshold")
     parser.add_argument("--nms_thres",
                         type=float,
@@ -82,6 +82,7 @@ if __name__ == "__main__":
 
     # Set up model
     model = Darknet(opt.model_def, img_size=opt.img_size).to(device)
+    # logger.info(model.yolo_layers)
 
     if opt.weights_path.endswith(".weights"):
         # Load darknet weights
@@ -107,7 +108,7 @@ if __name__ == "__main__":
     imgs = []  # Stores image paths
     img_detections = []  # Stores detections for each image index
 
-    logger.info("Performing object detection:")
+    logger.info("Performing object detection:\n")
     prev_time = time.time()
     for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
         # Configure input
