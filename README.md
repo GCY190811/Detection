@@ -75,20 +75,29 @@ pred_conf/pred_cls: sigmoid(pred_conf/pred_cls)统一在(0, 1)之间.
 
 ## Todo
 
-**pytorch-yolov3**
+__pytorch-yolov3__
 
 - [ ] 修改 torchsummary, BatchNorm2d 参数量为 4×N
 - [x] 模型 flops 统计
 - [ ] mixup
+- [x] test  
+- [ ] evaluate  
+- [ ] train
 
-**pytorch-ssd**
+__pytorch-ssd__
 
 - [ ] SSD
+- [x] test  
+- [ ] evaluate
+- [ ] train
 
-***pytorch-anchor-free**
+__pytorch-anchor-free__
 
 ## reference
 
-<https://github.com/eriklindernoren/PyTorch-YOLOv3>
-<https://github.com/sksq96/pytorch-summary>
-<https://github.com/Lyken17/pytorch-OpCounter>
+<https://github.com/eriklindernoren/PyTorch-YOLOv3>  
+<https://github.com/sksq96/pytorch-summary>  
+<https://github.com/Lyken17/pytorch-OpCounter>  
+
+<https://github.com/qfgaohao/pytorch-ssd>  
+<https://zhuanlan.zhihu.com/p/33544892>  
